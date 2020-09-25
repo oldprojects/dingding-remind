@@ -1,0 +1,584 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>%% title %% -日常提醒群官网</title>
+    <!-- import aliyun icon png -->
+    <link rel="shortcut icon" href="https://img.alicdn.com/tfs/TB1Sv5PV9zqK1RjSZPcXXbTepXa-80-80.png">
+    <!-- import CSS -->
+    <link rel="stylesheet" href="https://unpkg.com/element-ui/lib/theme-chalk/index.css">
+    <!-- import Vue before Element -->
+    <script src="https://unpkg.com/vue/dist/vue.js"></script>
+    <!-- import JavaScript -->
+    <script src="https://unpkg.com/element-ui/lib/index.js"></script>
+    <!-- import Axios -->
+    <script src="https://unpkg.com/axios/dist/axios.min.js"></script>
+</head>
+<body>
+<div id="app">
+    <el-container>
+        <!-- 页面头部 -->
+        <el-header>
+            <el-row class="height-100" type="flex" align="middle">
+                <el-col :span="3" :push="1">
+                    <el-row>
+                        日常提醒
+                    </el-row>
+                    <el-row type="flex" align="top">
+                        <el-col :span="12" :push="6" class="text-dingding">
+                            钉钉群: {{ dingding }}
+                        </el-col>
+                    </el-row>
+                </el-col>
+            </el-row>
+        </el-header>
+        <!-- 页面主体 -->
+        <el-main id="main">
+            <el-row class="height-100" type="flex" justify="center" align="middle">
+                <el-col :span="20">
+                    <el-card class="box-card" shadow="hover" body-style="padding: 0px">
+                        <div slot="header" class="clearfix tl">
+                            <span>定时任务列表</span>
+                            <el-col :span="10" class="fr">
+                                <el-col :span="5">
+                                    任务状态: {{ remind[remindType].name }}
+                                </el-col>
+                                <el-col :span="13">
+                                    <el-row type="flex" justify="center" align="middle">
+                                        <el-button-group>
+                                            <el-button v-for="(item, index) in remind" :key="index"
+                                                       :loading="item.loading" :disabled="item.disabled" size="small"
+                                                       round :icon="item.icon" @click="changeRemindFn(item)">
+                                                {{ item.cName }}
+                                            </el-button>
+                                        </el-button-group>
+                                    </el-row>
+                                </el-col>
+                                <el-col :span="6">
+                                    <el-button type="text" size="small" icon="el-icon-refresh" @click="refreshFn">
+                                        刷新
+                                    </el-button>
+                                    <el-button :disabled="remindType == 'shutdown'" type="text" size="small"
+                                               icon="el-icon-plus"
+                                               @click="resetFormFn(), isModify = false, dialogFormVisible = true">
+                                        添加任务
+                                    </el-button>
+                                </el-col>
+                            </el-col>
+                        </div>
+                        <el-table v-loading="loading.table"
+                                  :data="tableData.filter(data => !search || data.name.toLowerCase().includes(search.toLowerCase()))"
+                                  :max-height="400" current-row-key="id">
+                            <el-table-column type="index" width="50"></el-table-column>
+                            <el-table-column prop="name" label="任务名称"></el-table-column>
+                            <el-table-column prop="day_of_week" label="星期">
+                                <template slot-scope="scope">
+                                    <span v-for="(item, index) in scope.row.day_of_week.split(',')"
+                                          :key="index">{{ item != '*' ? `${week[item]} ` : '默认' }}</span>
+                                </template>
+                            </el-table-column>
+                            <el-table-column prop="hour" label="时">
+                                <template slot-scope="scope">
+                                    <span>{{ scope.row.hour != '*' ? scope.row.hour : '默认' }}</span>
+                                </template>
+                            </el-table-column>
+                            <el-table-column prop="minute" label="分">
+                                <template slot-scope="scope">
+                                    <span>{{ scope.row.minute != '*' ? scope.row.minute : '默认' }}</span>
+                                </template>
+                            </el-table-column>
+                            <el-table-column prop="second" label="秒">
+                                <template slot-scope="scope">
+                                    <span>{{ scope.row.second != '*' ? scope.row.second : '默认' }}</span>
+                                </template>
+                            </el-table-column>
+                            <el-table-column prop="at.isAtAll" label="是否@全体">
+                                <template slot-scope="scope">
+                                    <el-tag :type="scope.row.at.isAtAll ? 'primary' : 'success'" disable-transitions>
+                                        {{ scope.row.at.isAtAll ? '是' : '否' }}
+                                    </el-tag>
+                                </template>
+                            </el-table-column>
+                            <el-table-column prop="at.atMobiles" label="任务执行者">
+                                <template slot-scope="scope">
+                                    <el-tag style="margin: 2px;" v-for="(item, index) in scope.row.at.atMobiles"
+                                            :key="index" :type="(index % 2 === 0) ? 'primary' : 'success'"
+                                            disable-transitions>
+                                        {{ item ? item : '无'}}
+                                    </el-tag>
+                                </template>
+                            </el-table-column>
+                            <el-table-column prop="text.content" label="任务内容"></el-table-column>
+                            <el-table-column prop="at.isLoop" label="是否循环">
+                                <template slot-scope="scope">
+                                    <el-tag :type="scope.row.isLoop ? 'primary' : 'success'" disable-transitions>
+                                        是
+                                    </el-tag>
+                                </template>
+                            </el-table-column>
+                            <el-table-column align="right" width="250">
+                                <template slot="header" slot-scope="scope">
+                                    <el-input prefix-icon="el-icon-search" v-model="search" size="mini"
+                                              placeholder="输入 任务名称 搜索"/>
+                                </template>
+                                <template slot-scope="scope">
+                                    <el-button size="mini" icon="el-icon-edit" @click="modifyFn(scope.row)">
+                                        修改
+                                    </el-button>
+                                    <el-popover placement="bottom" width="160" v-model="scope.row.showDelete">
+                                        <el-row>
+                                            确定删除[{{ scope.row.name }}]吗？
+                                        </el-row>
+                                        <el-row class="tr" style="margin-top: 10px">
+                                            <el-button size="mini" type="text" @click="scope.row.showDelete = false">
+                                                再想想
+                                            </el-button>
+                                            <el-button
+                                                    type="danger"
+                                                    size="mini"
+                                                    :loading="loading.delete"
+                                                    @click="deleteFn(scope.$index, scope.row)"
+                                            >
+                                                删除
+                                            </el-button>
+                                        </el-row>
+                                        <el-button slot="reference" size="mini" type="danger" icon="el-icon-delete">
+                                            删除
+                                        </el-button>
+                                    </el-popover>
+                                </template>
+                            </el-table-column>
+                        </el-table>
+                    </el-card>
+                </el-col>
+            </el-row>
+        </el-main>
+        <!-- 页面尾部 -->
+        <el-footer>
+            <el-row>
+                <el-row type="flex" justify="center">
+                    {{ runtime }}
+                </el-row>
+                <el-row type="flex" :gutter="20" justify="center">
+                    <el-col :span="2" class="tr">
+                        <span>作者</span>
+                        <el-link class="link" icon="el-icon-lollipop" :underline="false" href="https://sibaiblog.com"
+                                 target="_blank">
+                            亖佰
+                        </el-link>
+                    </el-col>
+                    <el-col :span="3" class="tl">
+                        <span>个人博客</span>
+                        <el-link class="link" icon="el-icon-lollipop" :underline="false" href="https://sibaiblog.com"
+                                 target="_blank">
+                            sibaiblog
+                        </el-link>
+                    </el-col>
+                </el-row>
+            </el-row>
+        </el-footer>
+    </el-container>
+    <!-- 弹框表单 -->
+    <el-row>
+        <el-dialog :title="isModify ? '修改任务' : '添加任务'" :visible.sync="dialogFormVisible">
+            <el-form :model="form" :label-width="formLabelWidth">
+                <el-form-item label="任务名称">
+                    <el-input :disabled="isModify" v-model="form.name" autocomplete="off" :maxlength="10"
+                              show-word-limit clearable placeholder="请输入任务名称"/>
+                </el-form-item>
+                <el-form-item label="任务内容">
+                    <el-input placeholder="请输入需发送内容" v-model="form.content" :maxlength="30" show-word-limit clearable
+                              class="input-with-select">
+                        <el-select v-model="form.model" slot="prepend" placeholder="请选择任务模式">
+                            <el-option label="文本模式" value="text"></el-option>
+                        </el-select>
+                    </el-input>
+                </el-form-item>
+                <el-form-item label="是否@全体">
+                    <el-switch v-model="form.isAtAll" active-color="#13ce66" inactive-color="#ff4949" active-text="是"
+                               inactive-text="否" @change="isAtAll => isNeedAtMobiles = isAtAll">
+                    </el-switch>
+                </el-form-item>
+                <el-form-item label="任务执行者">
+                    <el-input v-model="form.atMobiles" :disabled="isNeedAtMobiles" autocomplete="off" :maxlength="59"
+                              show-word-limit clearable placeholder="请输入手机号码(最多5人)，以英文','分割"/>
+                </el-form-item>
+                <el-form-item label="任务-周" v-show="!isModify">
+                    <el-checkbox-group v-model="form.week">
+                        <el-checkbox v-for="(value, key, index) in week" :key="index" :label="key"
+                                     value="">{{ value }}</el-checkbox>
+                    </el-checkbox-group>
+                </el-form-item>
+                <el-form-item label="任务-时" v-show="!isModify">
+                    <el-checkbox-group v-model="form.hour">
+                        <el-checkbox label="0" value="">0</el-checkbox>
+                        <el-checkbox v-for="(item, index) in 23" :key="index" :label="`${item}`"
+                                     value="">{{ item }}</el-checkbox>
+                    </el-checkbox-group>
+                </el-form-item>
+                <el-form-item label="任务-分" v-show="!isModify">
+                    <el-checkbox-group v-model="form.minute">
+                        <el-checkbox label="0" value="">0</el-checkbox>
+                        <el-checkbox v-for="(item, index) in 59" :key="index" :label="`${item}`"
+                                     value="">{{ item }}</el-checkbox>
+                    </el-checkbox-group>
+                </el-form-item>
+                <el-form-item label="任务-秒" v-show="!isModify">
+                    <el-checkbox-group v-model="form.second">
+                        <el-checkbox label="0" value="">0</el-checkbox>
+                        <el-checkbox v-for="(item, index) in 59" :key="index" :label="`${item}`"
+                                     value="">{{ item }}</el-checkbox>
+                    </el-checkbox-group>
+                </el-form-item>
+                <el-form-item label="是否循环">
+                    <el-switch :disabled="true" v-model="form.isLoop" active-color="#13ce66" inactive-color="#ff4949"
+                               active-text="循环" inactive-text="单次">
+                    </el-switch>
+                </el-form-item>
+                <el-form-item class="tr">
+                    <el-button @click="resetFormFn(), dialogFormVisible = false">取 消</el-button>
+                    <el-button type="primary" :loading="loading.onSubmit" @click="onsubmitFn">提 交</el-button>
+                </el-form-item>
+            </el-form>
+        </el-dialog>
+    </el-row>
+</div>
+</body>
+<style>
+    body {
+        margin: 0;
+    }
+
+    #app {
+        font-family: Avenir, Helvetica, Arial, sans-serif;
+        -webkit-font-smoothing: antialiased;
+        -moz-osx-font-smoothing: grayscale;
+    }
+
+    .height-100 {
+        height: 100%;
+    }
+
+    .el-container {
+        height: 100vh;
+    }
+
+    .el-main {
+        margin: 5px 0px;
+        border-top-style: solid;
+        border-top-color: cyan;
+        border-bottom-style: solid;
+        border-bottom-color: cyan;
+    }
+
+    .tl {
+        text-align: left;
+    }
+
+    .tr {
+        text-align: right;
+    }
+
+    .fr {
+        float: right;
+    }
+
+    .link {
+        font-size: 16px;
+    }
+
+    .text-dingding {
+        font-size: 12px;
+    }
+
+    .el-select .el-input {
+        width: 150px;
+    }
+</style>
+<script>
+    new Vue({
+        el: '#app',
+        data: () => {
+            return {
+                interval: {
+                    roll: null,
+                    runTime: null,
+                },
+                runtime: '本站已稳定运行0天0小时0分0秒.',
+                dingding: '35945617',
+                loading: {
+                    table: false,
+                    delete: false,
+                    onSubmit: false,
+                },
+                remindType: 'shutdown',
+                remind: {
+                    'start': {
+                        'key': 'start',
+                        'name': '运行中',
+                        'cName': '启动',
+                        'loading': false,
+                        'disabled': true,
+                        'icon': 'el-icon-sunny',
+                    },
+                    'shutdown': {
+                        'key': 'shutdown',
+                        'name': '已停止',
+                        'cName': '停止',
+                        'loading': false,
+                        'disabled': true,
+                        'icon': 'el-icon-sunny',
+                    },
+                    'pause': {
+                        'key': 'pause',
+                        'name': '已暂停',
+                        'cName': '暂停',
+                        'loading': false,
+                        'disabled': true,
+                        'icon': 'el-icon-sunny',
+                    },
+                    'resume': {
+                        'key': 'resume',
+                        'name': '运行中',
+                        'cName': '恢复',
+                        'loading': false,
+                        'disabled': true,
+                        'icon': 'el-icon-sunny',
+                    },
+                },
+                tableData: [],
+                search: '',
+                isNeedAtMobiles: false,
+                week: {
+                    'sun': '星期日',
+                    'mon': '星期一',
+                    'tue': '星期二',
+                    'wed': '星期三',
+                    'thu': '星期四',
+                    'fri': '星期五',
+                    'sat': '星期六',
+                },
+                dialogFormVisible: false,
+                isModify: false,
+                form: {
+                    id: null,
+                    name: '',
+                    model: 'text',
+                    content: '',
+                    isAtAll: false,
+                    atMobiles: '',
+                    week: [],
+                    hour: [],
+                    minute: [],
+                    second: [],
+                    isLoop: true,
+                },
+                formLabelWidth: '120px',
+            }
+        },
+        methods: {
+            // 滚动标题
+            rollTitleFn: function () {
+                clearInterval(this.interval.roll)
+                let text = `${document.title}\xa0 \xa0 \xa0 \xa0`
+                this.interval.roll = setInterval(() => {
+                    document.title = text.substring(1, text.length) + text.substring(0, 1)
+                    text = document.title.substring(0, text.length)
+                }, 350)
+            },
+            // 获取破蛋日
+            runTimeFn: function () {
+                const _this = this
+                clearInterval(_this.interval.runTime)
+                axios({
+                    url: '/getBirthday',
+                    methods: 'GET',
+                }).then(resp => {
+                    _this.interval.runTime = setInterval(() => {
+                        const nowTime = new Date,
+                            timeold = nowTime.getTime() - resp.data,
+                            msPerDay = 864e5,
+                            e_daysold = timeold / msPerDay,
+                            daysold = Math.floor(e_daysold),
+                            e_hrsold = 24 * (e_daysold - daysold),
+                            hrsold = Math.floor(e_hrsold),
+                            e_minsold = 60 * (e_hrsold - hrsold),
+                            minsold = Math.floor(60 * (e_hrsold - hrsold)),
+                            seconds = Math.floor(60 * (e_minsold - minsold));
+                        const newVal = `本站已稳定运行${daysold}天${hrsold}小时${minsold}分${seconds}秒.`;
+                        _this.runtime = newVal;
+                    }, 1000)
+                })
+            },
+            // 获取任务状态
+            getStatusFn: function () {
+                axios({
+                    url: '/status',
+                    method: 'GET'
+                }).then(resp => {
+                    this.remindType = resp.data
+                }).catch(err => {
+                    this.$message({
+                        type: 'error',
+                        message: `获取状态失败: ${err.response.status} ${err.response.statusText}`,
+                    });
+                }).finally(() => {
+                    this.changeRemindBtnTypeFn()
+                })
+            },
+            // 操作任务
+            changeRemindFn: function (item) {
+                item.loading = true
+                axios({
+                    url: `/${item.key}`,
+                    method: 'GET',
+                }).then(resp => {
+                    this.remindType = item.key
+                    this.$message({
+                        type: 'success',
+                        message: resp.data,
+                    });
+                }).catch(err => {
+                    this.$message({
+                        type: 'error',
+                        message: `操作失败: ${err.response.status} ${err.response.statusText}`,
+                    });
+                }).finally(() => {
+                    item.loading = false
+                    this.changeRemindBtnTypeFn()
+                })
+            },
+            // 置换所有按钮状态
+            changeRemindBtnTypeFn: function () {
+                this.remind.start.disabled = this.remindType === 'shutdown' ? false : true
+                this.remind.shutdown.disabled = this.remindType !== 'shutdown' ? false : true
+                this.remind.pause.disabled = this.remindType !== 'pause' && this.remindType !== 'shutdown' ? false : true
+                this.remind.resume.disabled = this.remindType === 'pause' ? false : true
+            },
+            // 获取列表
+            getListFn: function () {
+                this.loading.table = true
+                return new Promise((resolve, reject) => {
+                    axios({
+                        url: '/remind/getList',
+                        method: 'GET',
+                    }).then(resp => {
+                        resolve(resp.data)
+                    }).catch(err => {
+                        this.$message({
+                            type: 'error',
+                            message: `获取列表失败: ${err.response.status} ${err.response.statusText}`,
+                        });
+                        reject(err)
+                    }).finally(() => {
+                        this.loading.table = false
+                    })
+                })
+            },
+            // 刷新列表
+            refreshFn: function () {
+                this.getListFn().then(resp => {
+                    this.tableData = resp
+                    this.$message({
+                        type: 'success',
+                        message: '刷新成功, 就是这么快~',
+                    });
+                })
+            },
+            // 删除
+            deleteFn: function (index, item) {
+                this.loading.delete = true
+                axios({
+                    url: '/remind/deleteById',
+                    method: 'DELETE',
+                    data: {
+                        id: item.id
+                    }
+                }).then(resp => {
+                    this.$message({
+                        type: 'success',
+                        message: resp.data,
+                    });
+                }).catch(err => {
+                    this.$message({
+                        type: 'error',
+                        message: `删除失败: ${err.response.status} ${err.response.statusText}`,
+                    });
+                }).finally(() => {
+                    this.loading.delete = false
+                    item.showDelete = false
+                    this.getListFn().then(resp => this.tableData = resp)
+                })
+            },
+            // 提交
+            onsubmitFn: function () {
+                this.loading.onSubmit = true
+                axios({
+                    url: `/remind/${this.isModify ? 'modify' : 'add'}`,
+                    method: 'POST',
+                    data: this.form
+                }).then(resp => {
+                    this.$message({
+                        type: 'success',
+                        message: resp.data,
+                    });
+                    this.getListFn().then(resp => this.tableData = resp)
+                }).catch(err => {
+                    this.$message({
+                        type: 'error',
+                        message: `${this.isModify ? '修改' : '添加'}失败: ${err.response.status} ${err.response.statusText}`,
+                    });
+                }).finally(() => {
+                    this.loading.onSubmit = false
+                    this.dialogFormVisible = false
+                    this.resetFormFn()
+                })
+            },
+            // 重置form
+            resetFormFn: function () {
+                this.form = {
+                    id: null,
+                    name: '',
+                    model: 'text',
+                    content: '',
+                    isAtAll: false,
+                    atMobiles: '',
+                    week: [],
+                    hour: [],
+                    minute: [],
+                    second: [],
+                    isLoop: true,
+                }
+            },
+            // 点击修改
+            modifyFn: function (row) {
+                const newForm = {
+                    id: row.id,
+                    name: row.name,
+                    model: row.msgtype,
+                    content: row.text.content,
+                    isAtAll: row.at.isAtAll,
+                    atMobiles: row.at.atMobiles,
+                    week: row.day_of_week.split(','),
+                    hour: row.hour.split(','),
+                    minute: row.minute.split(','),
+                    second: row.second.split(','),
+                    showDelete: false,
+                    isLoop: true,
+                }
+                this.form = newForm;
+                this.isNeedAtMobiles = row.at.isAtAll
+                this.isModify = true
+                this.dialogFormVisible = true
+            },
+        },
+        created: function () {
+            this.rollTitleFn()
+            this.runTimeFn()
+            this.changeRemindBtnTypeFn()
+            this.getStatusFn()
+            this.getListFn().then(resp => this.tableData = resp)
+        }
+    })
+</script>
+</html>
