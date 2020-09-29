@@ -5,10 +5,10 @@
 
 
 from flask import Flask, render_template, request
-from printMsg import copyRight
-from utils import *
+import common.printMsg
+import common.utils
+import dingding.dingding_robot
 from flask_apscheduler import APScheduler
-from dingding_robot import sendMsg2DingDing
 import json
 import time
 
@@ -87,24 +87,24 @@ def remind_getList():
     respList = []
     jobs = scheduler.get_jobs()
     for job in jobs:
-        respList.append(beautify2Job(job))
+        respList.append(common.utils.beautify2Job(job))
     return json.dumps(respList)
 
 
 # 获取单个详情
 @app.route('/remind/getById', methods=['GET'])
 def remind_getById():
-    params = request_parse(request)
+    params = common.utils.request_parse(request)
     job = scheduler.get_job(params.get('id'))
-    return json.dumps(beautify2Job(job))
+    return json.dumps(common.utils.beautify2Job(job))
 
 
 # 添加job
 @app.route('/remind/add', methods=['POST'])
 def remind_add():
-    data = request_parse(request)
-    id = 'job_' + random2Str(7)
-    sendMsg = getSendMsg(data)
+    data = common.utils.request_parse(request)
+    id = 'job_' + common.utils.random2Str(7)
+    sendMsg = common.utils.getSendMsg(data)
 
     # 周
     day_of_week = '*'
@@ -128,7 +128,7 @@ def remind_add():
 
     scheduler.add_job(id=id,
                       name=data.get('name'),
-                      func=sendMsg2DingDing,
+                      func=dingding.dingding_robot.sendMsg2DingDing,
                       args=[sendMsg],
                       trigger='cron',
                       day_of_week=day_of_week,
@@ -142,11 +142,11 @@ def remind_add():
 # 修改job
 @app.route('/remind/modify', methods=['POST'])
 def remind_modify():
-    data = request_parse(request)
-    sendMsg = getSendMsg(data)
+    data = common.utils.request_parse(request)
+    sendMsg = common.utils.getSendMsg(data)
 
     scheduler.modify_job(id=data.get('id'),
-                         func=sendMsg2DingDing,
+                         func=dingding.dingding_robot.sendMsg2DingDing,
                          args=[sendMsg]
                          )
     return '[%s]修改成功...' % data.get('name')
@@ -155,7 +155,7 @@ def remind_modify():
 # 删除job
 @app.route('/remind/deleteById', methods=['DELETE'])
 def remind_deleteById():
-    data = request_parse(request)
+    data = common.utils.request_parse(request)
     scheduler.remove_job(data.get('id'))
     return '删除成功...'
 
@@ -179,7 +179,7 @@ def birthday():
 
 # 程序主入口
 if __name__ == '__main__':
-    copyRight()
+    common.printMsg.copyRight()
     # 注入 apscheduler
     scheduler = APScheduler()
     scheduler.init_app(app)
